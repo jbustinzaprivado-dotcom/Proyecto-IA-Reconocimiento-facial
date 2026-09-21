@@ -14,7 +14,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
 import { canAccess, ROLE_LABEL } from './auth/roles'
 import type { Access } from './auth/roles'
@@ -27,6 +27,7 @@ const Cuenta = lazy(() => import('./pages/Cuenta'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const EntrenamientoML = lazy(() => import('./pages/EntrenamientoML'))
 const Historial = lazy(() => import('./pages/Historial'))
+const Landing = lazy(() => import('./pages/Landing'))
 const Personas = lazy(() => import('./pages/Personas'))
 const Probabilidades = lazy(() => import('./pages/Probabilidades'))
 const Reconocimiento = lazy(() => import('./pages/Reconocimiento'))
@@ -34,7 +35,9 @@ const RegistroFacial = lazy(() => import('./pages/RegistroFacial'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
 
 const APP_NAME = 'Reconocimiento facial'
+const COMPANY_NAME = 'Aurora Biometrics'
 const ACCOUNT_PATH = '/cuenta'
+const SIGN_IN_PATH = '/ingresar'
 
 interface NavItem {
   to: string
@@ -94,8 +97,10 @@ const NAV_ITEMS: NavItem[] = [
   },
 ]
 
-function pageTitle(pathname: string, user: User | null): string {
-  if (user === null) return `Iniciar sesión · ${APP_NAME}`
+function pageTitle(pathname: string, user: User | null, showsLanding = false): string {
+  if (user === null) {
+    return showsLanding ? `${COMPANY_NAME} · ${APP_NAME}` : `Iniciar sesión · ${APP_NAME}`
+  }
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
   if (path === ACCOUNT_PATH) return `Mi cuenta · ${APP_NAME}`
   const item = NAV_ITEMS.find((entry) => entry.to === path)
@@ -185,14 +190,19 @@ function NotFound() {
 }
 
 export default function App() {
-  const { status, user } = useAuth()
+  const { status, user, notice } = useAuth()
   const { pathname } = useLocation()
   // The menu is open only for the page it was opened on, so changing page closes it
   const [menuPath, setMenuPath] = useState<string | null>(null)
   const menuOpen = menuPath === pathname
   // While a saved session is being checked there is nothing to say about the page yet
+  // Without a session the home address is the landing page, unless the person is here because their
+  // session ended: then they are told so, on the sign-in
+  const showsLanding = status === 'anonymous' && notice === null && pathname === '/'
   const title =
-    status === 'loading' ? APP_NAME : pageTitle(pathname, status === 'authenticated' ? user : null)
+    status === 'loading'
+      ? APP_NAME
+      : pageTitle(pathname, status === 'authenticated' ? user : null, showsLanding)
 
   useEffect(() => {
     document.title = title
@@ -214,7 +224,22 @@ export default function App() {
       </p>
     )
   }
-  if (status === 'anonymous' || user === null) return <Login />
+  if (status === 'anonymous' || user === null) {
+    return (
+      <Suspense
+        fallback={
+          <p role="status" className="p-8 text-sm text-muted">
+            Cargando…
+          </p>
+        }
+      >
+        <Routes>
+          <Route path="/" element={showsLanding ? <Landing /> : <Login />} />
+          <Route path="*" element={<Login />} />
+        </Routes>
+      </Suspense>
+    )
+  }
 
   const items = NAV_ITEMS.filter((item) => canAccess(user.rol, item.access))
 
@@ -281,6 +306,7 @@ export default function App() {
                 />
               ))}
               <Route path={ACCOUNT_PATH} element={<Cuenta />} />
+              <Route path={SIGN_IN_PATH} element={<Navigate to="/" replace />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

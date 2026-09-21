@@ -113,7 +113,12 @@ def register_faces(
     responses={404: {"model": ApiError}, 422: {"model": ApiError}},
 )
 def update_persona(
-    persona_id: int, data: PersonaUpdate, db: DbSession, user: Admin, audit: Auditor
+    persona_id: int,
+    data: PersonaUpdate,
+    db: DbSession,
+    user: Admin,
+    audit: Auditor,
+    engine: OptionalEngine,
 ):
     """Deactivate a person (they are no longer recognized) or activate them again."""
     persona = persona_service.set_active(
@@ -125,7 +130,14 @@ def update_persona(
         resource="persona",
         resource_id=persona.id,
     )
-    return ApiResponse(resultado=PersonaOut.model_validate(persona))
+    # The same person as the list gives them, with how many faces they have: without it the screen
+    # would show "no faces" for somebody who has them
+    counts = persona_service.face_counts(db, engine.name if engine else None)
+    return ApiResponse(
+        resultado=PersonaOut.model_validate(persona).model_copy(
+            update={"rostros": counts.get(persona.id, 0)}
+        )
+    )
 
 
 @router.delete(

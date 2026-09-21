@@ -154,6 +154,19 @@ describe('session: when the browser will not store anything', () => {
     expect(session.loadSession()).toBeNull()
   })
 
+  it('forgets an old copy in memory once a save works, so it cannot come back later', async () => {
+    const session = await load()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+    session.saveSession(stored({ token: 'viejo' }))
+    setItem.mockRestore()
+    session.saveSession(stored({ token: 'nuevo' }))
+    // The storage is emptied from outside (another script, the person clearing site data)
+    window.sessionStorage.clear()
+    expect(session.getToken()).toBeNull()
+  })
+
   it('prefers what is saved in the storage over an old copy in memory', async () => {
     const session = await load()
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {

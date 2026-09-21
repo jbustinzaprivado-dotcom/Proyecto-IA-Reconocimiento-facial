@@ -123,6 +123,17 @@ describe('Auditoria: the rows', () => {
   })
 })
 
+describe('Auditoria: keyboard', () => {
+  it('lets the keyboard reach a table that scrolls sideways, as a named region', async () => {
+    answer(page([entry(1)]))
+    render(<Auditoria />)
+    await screen.findByText('ana@example.com')
+    const region = screen.getByRole('region', { name: 'Registro de auditoría' })
+    expect(region.getAttribute('tabindex')).toBe('0')
+    expect(region.querySelector('table')).toBeTruthy()
+  })
+})
+
 describe('Auditoria: more rows', () => {
   it('offers more when the API says there is a next page, and asks for it with that number', async () => {
     answer(page([entry(9), entry(8)], 8), page([entry(7), entry(6)], null))
@@ -339,6 +350,53 @@ describe('Auditoria: when it cannot be had', () => {
     fireEvent.click(button('Filtrar'))
     expect((await screen.findByRole('alert')).textContent).toContain('Filtro inválido.')
     expect(screen.queryByText('ana@example.com')).toBeNull()
+  })
+})
+
+describe('Auditoria: answers that come late', () => {
+  it('asks again when the filters are taken off, even if none was applied', async () => {
+    answer(page([entry(1)]))
+    render(<Auditoria />)
+    await screen.findByText('ana@example.com')
+    answer(page([entry(2, { usuario_email: 'luis@example.com' })]))
+    fireEvent.click(button('Quitar filtros'))
+    await screen.findByText('luis@example.com')
+    expect(api.getAudit).toHaveBeenCalledTimes(2)
+    expect(lastQuery()).toEqual({})
+  })
+
+  it('does not show the rows of the old filters while the new ones are being asked for', async () => {
+    answer(page([entry(1)]))
+    render(<Auditoria />)
+    await screen.findByText('ana@example.com')
+    let finish: (value: Awaited<ReturnType<typeof api.getAudit>>) => void = () => {}
+    vi.mocked(api.getAudit).mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+    fireEvent.click(button('Filtrar'))
+    await screen.findByText('Cargando…')
+    expect(screen.queryByText('ana@example.com')).toBeNull()
+    expect(document.querySelector('table')).toBeNull()
+    finish({ success: true, resultado: page([entry(2, { usuario_email: 'luis@example.com' })]) })
+    await screen.findByText('luis@example.com')
+  })
+
+  it('does not add a page that was asked for under filters that have since changed', async () => {
+    answer(page([entry(9)], 9))
+    render(<Auditoria />)
+    await screen.findByText('ana@example.com')
+    let late: (value: Awaited<ReturnType<typeof api.getAudit>>) => void = () => {}
+    vi.mocked(api.getAudit).mockReturnValueOnce(new Promise((resolve) => (late = resolve)))
+    fireEvent.click(button('Cargar más'))
+    await waitFor(() => expect(button('Cargando…').disabled).toBe(true))
+
+    // Meanwhile the person applies other filters, and those rows arrive first
+    answer(page([entry(4, { usuario_email: 'nuevo@example.com' })]))
+    fireEvent.click(button('Filtrar'))
+    await screen.findByText('nuevo@example.com')
+
+    late({ success: true, resultado: page([entry(7, { usuario_email: 'tarde@example.com' })]) })
+    await waitFor(() => expect(button('Actualizar').disabled).toBe(false))
+    expect(screen.queryByText('tarde@example.com')).toBeNull()
+    expect(bodyRows()).toHaveLength(1)
   })
 })
 

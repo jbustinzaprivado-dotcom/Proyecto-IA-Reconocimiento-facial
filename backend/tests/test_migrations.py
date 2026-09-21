@@ -635,3 +635,61 @@ def test_the_audit_log_is_dropped_before_the_users_it_points_to(monkeypatch):
     assert dropped.index("auditoria") < dropped.index("usuarios")
     # The indexes go before the table they are on
     assert sql.index("DROP INDEX ix_auditoria_usuario_id") < sql.index("DROP TABLE auditoria")
+
+
+APP_TABLES = (
+    "personas",
+    "face_embeddings",
+    "recognition_logs",
+    "ml_training_records",
+    "usuarios",
+    "auditoria",
+    "alembic_version",
+)
+
+
+def test_row_level_security_is_switched_on_for_every_table_in_postgres(monkeypatch):
+    """Supabase publishes by HTTP the tables that have it off: there is biometric data here."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg2://usuario:clave@servidor:5432/base")
+    get_settings.cache_clear()
+    try:
+        output = io.StringIO()
+        command.upgrade(alembic_config(output), "3601eda36a2e:head", sql=True)
+    finally:
+        get_settings.cache_clear()
+    sql = output.getvalue()
+    for table in APP_TABLES:
+        assert f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" in sql, table
+    # No policy is created: with none, nobody but the owner of the tables can read them
+    assert "CREATE POLICY" not in sql
+
+
+def test_going_back_switches_it_off_again_in_postgres(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg2://usuario:clave@servidor:5432/base")
+    get_settings.cache_clear()
+    try:
+        output = io.StringIO()
+        command.downgrade(alembic_config(output), "head:3601eda36a2e", sql=True)
+    finally:
+        get_settings.cache_clear()
+    sql = output.getvalue()
+    for table in APP_TABLES:
+        assert f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY;" in sql, table
+
+
+def test_sqlite_has_no_row_level_security_and_the_migration_does_nothing_there(database_url):
+    command.upgrade(alembic_config(), "head")
+    engine = create_engine(database_url)
+    try:
+        assert set(inspect(engine).get_table_names()) == set(EXPECTED_COLUMNS) | {"alembic_version"}
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config(), "3601eda36a2e")
+    assert tables(database_url) >= set(EXPECTED_COLUMNS)
+
+
+def test_the_head_is_the_row_level_security_migration_after_users_and_audit():
+    script = ScriptDirectory.from_config(alembic_config())
+    head = script.get_revision(script.get_current_head())
+    assert head.revision == "bf41ea862b7e"
+    assert head.down_revision == "3601eda36a2e"

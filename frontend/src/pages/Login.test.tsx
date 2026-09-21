@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { asRole } from '../auth/testWrappers'
 import Login from './Login'
@@ -13,8 +14,13 @@ vi.mock('../services/api', () => ({
 const signIn = vi.fn<(email: string, password: string) => Promise<string | null>>()
 
 function renderLogin(notice: string | null = null) {
+  const SignedOut = asRole('administrador', { status: 'anonymous', user: null, notice, signIn })
   return render(<Login />, {
-    wrapper: asRole('administrador', { status: 'anonymous', user: null, notice, signIn }),
+    wrapper: ({ children }) => (
+      <MemoryRouter>
+        <SignedOut>{children}</SignedOut>
+      </MemoryRouter>
+    ),
   })
 }
 
@@ -41,6 +47,11 @@ describe('Login: the form', () => {
     expect(email().autocomplete).toBe('username')
     expect(password().type).toBe('password')
     expect(password().autocomplete).toBe('current-password')
+  })
+
+  it('names the company at the top, as the landing page does', () => {
+    renderLogin()
+    expect(screen.getByText('Aurora Biometrics')).toBeTruthy()
   })
 
   it('keeps Entrar off until there is an address and a password', () => {
@@ -144,9 +155,15 @@ describe('Login: while it works and when it fails', () => {
 })
 
 describe('Login: why the person is here', () => {
-  it('says nothing when they simply arrived', () => {
+  it('says nothing when they simply arrived, and offers the way back to the start', () => {
     renderLogin(null)
     expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Volver al inicio' }).getAttribute('href')).toBe('/')
+  })
+
+  it('does not offer the way back to the start when it is telling the person something', () => {
+    renderLogin('Tu sesión venció. Inicia sesión otra vez.')
+    expect(screen.queryByRole('link', { name: 'Volver al inicio' })).toBeNull()
   })
 
   it('says why the session ended, when it was not their doing', () => {
@@ -193,8 +210,13 @@ describe('Login: the demonstration accounts in a build for a server', () => {
     // The modules are new copies: the wrapper has to come from the same ones as the page
     const { default: ProductionLogin } = await import('./Login')
     const fresh = await import('../auth/testWrappers')
+    const SignedOut = fresh.asRole('administrador', { status: 'anonymous', user: null, signIn })
     render(<ProductionLogin />, {
-      wrapper: fresh.asRole('administrador', { status: 'anonymous', user: null, signIn }),
+      wrapper: ({ children }) => (
+        <MemoryRouter>
+          <SignedOut>{children}</SignedOut>
+        </MemoryRouter>
+      ),
     })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.queryByText('Cuentas de demostración')).toBeNull()

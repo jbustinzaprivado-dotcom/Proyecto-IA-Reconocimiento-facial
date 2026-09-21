@@ -104,6 +104,16 @@ describe('Usuarios: the list', () => {
   })
 })
 
+describe('Usuarios: keyboard', () => {
+  it('lets the keyboard reach a table that scrolls sideways, as a named region', async () => {
+    renderPage()
+    await screen.findByText('Omar Operador')
+    const region = screen.getByRole('region', { name: 'Tabla de usuarios' })
+    expect(region.getAttribute('tabindex')).toBe('0')
+    expect(region.querySelector('table')).toBeTruthy()
+  })
+})
+
 describe('Usuarios: changing the role', () => {
   it('changes it with the server, shows the answer and says so', async () => {
     renderPage()
@@ -338,6 +348,29 @@ describe('Usuarios: creating one', () => {
     expect(emailField().getAttribute('aria-describedby')).toBe('usuario-email-error')
     expect(api.createUser).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ['A', false],
+    ['Al', true],
+    ['A'.repeat(100), true],
+    ['A'.repeat(101), false],
+    ['  A  ', false],
+  ])(
+    'accepts a name of %j: %s (2 to 100 characters, counted after cleaning it)',
+    async (name, ok) => {
+      renderPage()
+      await screen.findByText('Omar Operador')
+      vi.mocked(api.createUser).mockResolvedValue({ success: true, resultado: nora })
+      fill(name, 'nora@example.com', 'una clave larga 1')
+      fireEvent.click(create())
+      if (ok) {
+        await waitFor(() => expect(api.createUser).toHaveBeenCalledTimes(1))
+      } else {
+        expect(screen.getByText('El nombre debe tener entre 2 y 100 caracteres.')).toBeTruthy()
+        expect(api.createUser).not.toHaveBeenCalled()
+      }
+    },
+  )
 
   it('does not accept a password equal to the address', async () => {
     renderPage()

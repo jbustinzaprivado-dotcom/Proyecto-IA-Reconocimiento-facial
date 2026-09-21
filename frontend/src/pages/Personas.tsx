@@ -196,7 +196,12 @@ export default function Personas() {
         {persons.length === 0 ? (
           <p className="text-sm text-muted">Todavía no hay personas registradas.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-line bg-white">
+          <div
+            role="region"
+            tabIndex={0}
+            aria-label="Tabla de personas"
+            className="overflow-x-auto rounded-xl border border-line bg-white"
+          >
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Personas registradas</caption>
               <thead className="border-b border-line bg-tint text-muted">

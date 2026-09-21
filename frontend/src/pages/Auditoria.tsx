@@ -247,7 +247,12 @@ export default function Auditoria() {
         <p className="text-sm text-muted">No hay registros con estos filtros.</p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl border border-line bg-white">
+          <div
+            role="region"
+            tabIndex={0}
+            aria-label="Registro de auditoría"
+            className="overflow-x-auto rounded-xl border border-line bg-white"
+          >
             <table className="w-full text-left text-sm">
               <caption className="sr-only">
                 Registro de auditoría, del más nuevo al más viejo

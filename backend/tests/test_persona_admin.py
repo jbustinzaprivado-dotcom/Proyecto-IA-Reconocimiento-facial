@@ -283,3 +283,29 @@ def test_deactivating_and_activating_are_told_apart_in_the_audit_log(
         ("persona_desactivar", "persona", ana["id"]),
         ("persona_activar", "persona", ana["id"]),
     ]
+
+
+def test_changing_the_state_answers_with_the_faces_the_person_has(client: TestClient, register):
+    """The screen replaces the row with this answer: a zero here would say 'no faces' by mistake."""
+    ana = register("Ana Torres", "ana@example.com", seeds=(1, 2, 3))
+    sin = register("Sin Rostro", "sin@example.com")
+    off = client.patch(f"/api/personas/{ana['id']}", json={"activo": False}).json()["resultado"]
+    assert (off["activo"], off["rostros"]) == (False, 3)
+    on = client.patch(f"/api/personas/{ana['id']}", json={"activo": True}).json()["resultado"]
+    assert (on["activo"], on["rostros"]) == (True, 3)
+    assert (
+        client.patch(f"/api/personas/{sin['id']}", json={"activo": False}).json()["resultado"][
+            "rostros"
+        ]
+        == 0
+    )
+
+
+def test_the_faces_of_the_answer_are_the_ones_of_the_model_in_use(
+    client: TestClient, db: Session, register
+):
+    ana = register("Ana Torres", "ana@example.com", seeds=(1, 2))
+    db.scalars(select(FaceEmbedding)).first().modelo = "insightface"
+    db.commit()
+    answer = client.patch(f"/api/personas/{ana['id']}", json={"activo": False}).json()
+    assert answer["resultado"]["rostros"] == 1

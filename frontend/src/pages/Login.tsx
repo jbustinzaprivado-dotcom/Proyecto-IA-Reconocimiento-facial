@@ -1,5 +1,6 @@
 import { ScanFace } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { USE_MOCKS } from '../services/api'
@@ -42,9 +43,14 @@ export default function Login() {
       <div className="w-full max-w-md space-y-6 rounded-xl border border-line bg-white p-6 shadow-sm">
         <div className="flex items-center gap-2 font-semibold text-brand">
           <ScanFace size={24} aria-hidden="true" />
-          Reconocimiento facial
+          Aurora Biometrics
         </div>
         <h1 className="text-2xl font-semibold text-ink">Iniciar sesión</h1>
+        {!notice && (
+          <Link to="/" className="inline-block text-sm font-medium text-brand underline">
+            Volver al inicio
+          </Link>
+        )}
 
         {notice && (
           <p

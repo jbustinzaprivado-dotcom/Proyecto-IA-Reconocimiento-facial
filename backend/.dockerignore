@@ -1,0 +1,24 @@
+# Lo que no debe entrar a la imagen: secretos, datos locales, cachés y lo que solo sirve para desarrollar
+.env
+.env.*
+!.env.example
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Bases de datos locales y pesos: la imagen baja los suyos al construir
+*.db
+*.sqlite3
+# Solo la carpeta de pesos de la raíz: app/models (las tablas) sí entra
+models/
+
+tests/
+requirements-dev.txt
+requirements-insightface.txt
+README.md
+Dockerfile
+.dockerignore

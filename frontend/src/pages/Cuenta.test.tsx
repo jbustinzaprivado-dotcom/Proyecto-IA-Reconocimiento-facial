@@ -147,6 +147,19 @@ describe('Cuenta: the form', () => {
     expect(save().matches(':disabled')).toBe(false)
   })
 
+  it('does not send the form again while it works, however it is sent', async () => {
+    let finish: (value: Awaited<ReturnType<typeof api.changePassword>>) => void = () => {}
+    vi.mocked(api.changePassword).mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    renderPage()
+    fill()
+    fireEvent.click(save())
+    await waitFor(() => expect(save().textContent).toBe('Guardando…'))
+    fireEvent.submit(save().closest('form') as HTMLFormElement)
+    expect(api.changePassword).toHaveBeenCalledTimes(1)
+    finish({ success: true, resultado: session })
+    await screen.findByRole('status')
+  })
+
   it('shows what the server says when it refuses, and keeps what was typed to try again', async () => {
     vi.mocked(api.changePassword).mockResolvedValue({
       success: false,

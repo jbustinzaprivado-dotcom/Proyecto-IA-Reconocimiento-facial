@@ -1,6 +1,6 @@
 # Prueba manual de la cámara real
 
-Esta lista cubre lo único que las pruebas automáticas y el navegador integrado de Claude no pueden verificar: **la cámara real de tu equipo**. Tiene dos partes: la **Parte A** (unos 15 minutos) prueba la cámara y la interfaz con datos simulados y la **Parte B** (unos 10 minutos más) repite lo esencial contra el backend real.
+Esta lista cubre lo único que las pruebas automáticas y el navegador integrado de Claude no pueden verificar: **la cámara real de tu equipo**. Tiene tres partes: la **Parte A** (unos 15 minutos) prueba la cámara y la interfaz con datos simulados, la **Parte B** (unos 10 minutos más) repite lo esencial contra el backend real y la **Parte C** (unos 20 minutos) prueba el inicio de sesión, los roles, la página de Aurora Biometrics y, al final, el sitio ya publicado.
 
 ## Antes de empezar (Parte A)
 
@@ -107,7 +107,12 @@ Haz esto después de la Parte A. Usa la misma tabla de "Datos de la prueba".
    venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
    ```
    Si quieres partir de cero, detén el servidor, borra `backend/dev.db` y repite este paso.
-3. En otra terminal, dentro de `frontend/`: `npm run dev:api`. Abre <http://localhost:5173>.
+3. **Crea el primer administrador** (la API exige iniciar sesión y no crea a nadie sola). En otra terminal, dentro de `backend/`:
+   ```bash
+   venv/Scripts/python.exe -m app.scripts.create_admin
+   ```
+   Te pide el correo, el nombre y la contraseña (dos veces, sin mostrarla, mínimo 10 caracteres).
+4. En otra terminal, dentro de `frontend/`: `npm run dev:api`. Abre <http://localhost:5173>: verás la página de **Aurora Biometrics**. Pulsa **Ingresar** e inicia sesión con esa cuenta. Los pasos G a I los haces como administrador.
 
 ### G. Registro y reconocimiento reales
 
@@ -175,6 +180,48 @@ Haz esto después de la Parte A. Usa la misma tabla de "Datos de la prueba".
 ```
 ```
 
+## Parte C: acceso, roles y sitio publicado (Fase 5)
+
+Se hace con el backend real (Parte B) y crea unas cuentas de prueba. Usa la misma tabla de "Datos de la prueba".
+
+### J. Acceso, roles y páginas nuevas
+
+Antes de empezar, como administrador, entra en **Usuarios** y crea dos cuentas: un **operador** y una de **consulta** (contraseñas de 10 caracteres o más).
+
+| # | Paso | Qué debe pasar | Resultado |
+|---|---|---|---|
+| J1 | Cierra sesión y abre `/`. | Ves la página de **Aurora Biometrics** (portada, «Qué hace», «Cómo funciona», «Privacidad y consentimiento» y un pie que dice que es una empresa ficticia), sin el menú de la aplicación. | |
+| J2 | Sin sesión, abre `/usuarios`. | Ves **Iniciar sesión**, no la página. | |
+| J3 | Con el operador, escribe una contraseña equivocada. Repite con un correo que no existe. | Las dos veces dice «Correo o contraseña incorrectos.» y nada más: no se puede saber qué correos existen. | |
+| J4 | Con la cuenta de **consulta** (no con la del administrador), equivócate cinco veces seguidas y luego escribe la contraseña buena. | A la quinta, la cuenta se bloquea: «Demasiados intentos fallidos. Vuelve a intentarlo en 15 minutos.» Ni la contraseña buena entra hasta que pase el plazo (o un administrador le ponga una contraseña nueva en **Usuarios**). | |
+| J5 | Entra como **administrador**. | Nueve páginas en el menú, tu nombre y rol abajo, y **Mi cuenta** y **Cerrar sesión**. | |
+| J6 | En **Usuarios**, intenta crear una cuenta con un correo que ya existe, y una con contraseña de 5 caracteres. | Errores en español, sin crear nada. El botón **Desactivar** de tu propia fila está apagado. | |
+| J7 | Entra como **operador**. | Siete páginas. `/usuarios` y `/auditoria` dicen «Sin permiso». En **Personas** ves la lista sin botones de acción y el aviso de que solo un administrador puede desactivar o eliminar. | |
+| J8 | Entra como **consulta**. | Cuatro páginas (Dashboard, Probabilidades, Entrenamiento ML e Historial). `/registro` dice «Sin permiso». En **Probabilidades** solo está el CSV del análisis (no el del historial, que lleva nombres). En **Entrenamiento ML** no hay botón de entrenar y dice quién puede. | |
+| J9 | En **Mi cuenta**, cambia la contraseña con la actual equivocada, y luego bien. | Primero «La contraseña actual no es correcta.»; después «Contraseña cambiada. Las demás sesiones se cerraron.» y sigues dentro. | |
+| J10 | Con la misma cuenta abierta en dos pestañas, cambia la contraseña en una y haz cualquier cosa en la otra. | La otra vuelve a **Iniciar sesión** con el aviso «Tu sesión no es válida o venció. Inicia sesión otra vez.» | |
+| J11 | Como administrador, desactiva la cuenta de alguien que tiene la sesión abierta en otra pestaña. En esa pestaña, pulsa cualquier enlace. | Esa pestaña vuelve a **Iniciar sesión** con el aviso. Con esa cuenta ya no se puede entrar. | |
+| J12 | En **Registro facial**, registra a alguien con una foto **borrosa u oscura**. | La persona queda registrada y dice qué foto se rechazó y por qué. Pulsa **Cambiar las fotos**, sube una buena y **Reintentar subida**: se completa **sin registrar a la persona otra vez**. | |
+| J13 | En **Reconocimiento**, activa el **Modo evaluación** teniendo una persona registrada que quedó sin rostros (J12, si abandonaste). | La lista solo ofrece a las personas activas **con rostros**, y «Desconocido». | |
+| J14 | En **Personas** (administrador), desactiva a una persona y reconoce su foto. Actívala de nuevo. | Desactivada, ya no aparece como candidata; activada, vuelve. La fila conserva su número de rostros. | |
+| J15 | Elimina a una persona con intentos en el historial. | Pide escribir su nombre (no acepta otro, ni deja pulsar antes). Después, sus intentos siguen en **Historial** pero **sin su nombre**. | |
+| J16 | Pulsa **Limpiar personas sin rostros**. | Pide confirmación, y dice cuántas eliminó. Nadie con rostros se toca. | |
+| J17 | En **Auditoría** (administrador), revisa lo que hiciste. Filtra por acción, por resultado y por usuario. Pulsa **Cargar más** si hay más de 100. | Están tus inicios de sesión (correctos, fallidos y bloqueados), los usuarios creados, los reconocimientos, las descargas y los permisos negados. **Nunca** una contraseña, un token ni el nombre de una persona registrada. | |
+| J18 | En **Probabilidades**, descarga el CSV del historial (operador o administrador) y el del análisis. | Se guardan como archivo. Con la sesión vencida, en cambio, la página te lleva a iniciar sesión. | |
+| J19 | Abre la landing, el inicio de sesión, Usuarios, Personas y Auditoría en un ancho de celular (F12, modo móvil, 375 px). | Ninguna página se desplaza hacia los lados; las tablas se desplazan dentro de su recuadro, al que se llega con el teclado (Tab). | |
+
+### K. Después de publicar (Vercel, contenedor y Supabase)
+
+Sigue la lista de `docs/DESPLIEGUE.md` (sección 8), y además, con la dirección real:
+
+| # | Paso | Qué debe pasar | Resultado |
+|---|---|---|---|
+| K1 | Abre la dirección de Vercel desde un **celular**. Entra y ve a **Registro facial**. | Pide permiso de cámara (solo funciona con HTTPS) y la vista previa se ve. Registra a una persona con tu rostro y reconócela. | |
+| K2 | Abre `https://TU-API/docs`. | Da 404: en producción la documentación está apagada. | |
+| K3 | En el editor SQL de Supabase, ejecuta la consulta de `docs/DESPLIEGUE.md` (sección 4, punto 5). | Todas las tablas dicen `relrowsecurity = true`. | |
+| K4 | En **Auditoría**, mira la columna «Dirección» entrando desde dos redes distintas. | Si son distintas, puedes dejar `TRUST_FORWARDED_FOR=true`; si siempre es la misma (la del proxy), déjalo en `false`. | |
+| K5 | Pulsa F12 → Red y revisa una petición a la API. | Lleva `Authorization: Bearer …`, la respuesta trae las cabeceras `Strict-Transport-Security` y `Content-Security-Policy`, y **ninguna** respuesta trae vectores faciales. | |
+
 ## Consola de la Parte A
 
 ¿Apareció algún mensaje en rojo en la consola durante la prueba? Cópialo aquí:
@@ -188,10 +235,11 @@ Cuéntamelo en el chat (o pega esta tabla completada) y lo registro en `docs/PRO
 
 ## Lo que esta prueba NO cubre
 
-- **Celular real:** la cámara en un teléfono exige HTTPS, así que se probará con la demo publicada (Fase 5).
+- **Celular real:** la cámara en un teléfono exige HTTPS, así que solo se prueba con la demo publicada (paso K1).
 - **Firefox y Safari:** no forman parte de esta prueba.
 - **Exactitud del reconocimiento:** con una o dos personas no se mide si reconoce bien; solo se ve el flujo y los valores de similitud. La calibración con más fotos quedó diferida (D112).
 - **Calidad de la probabilidad:** con unas pocas decenas de intentos, la probabilidad calibrada es orientativa. Solo se puede confiar en ella con muchos intentos evaluados, de personas distintas y con etiquetas correctas, y solo vale para esta cámara, estas personas y estas condiciones.
 - **Tasas de error fiables:** las del análisis necesitan muchos intentos evaluados, con personas y desconocidos distintos, y con etiquetas correctas. Con una prueba de unos pocos intentos solo se comprueba que las cuentas cuadran.
-- **Fotos de fotos:** no hay detección de vida; una foto impresa o en un celular delante de la cámara se aceptaría (Fase 5).
-- **Postgres o Supabase:** la Parte B usa SQLite. La base real de la demo se prueba en la Fase 5.
+- **Fotos de fotos:** no hay detección de vida; una foto impresa o en un celular delante de la cámara se aceptaría. No está en el alcance de esta versión.
+- **Postgres o Supabase reales:** la Parte B usa SQLite. Las pruebas automáticas del backend sí se corrieron contra un PostgreSQL 17 en memoria (PGlite), pero **no** contra Supabase, ni con varias conexiones a la vez: eso se comprueba al publicar (Parte C, K).
+- **Docker, Render, Vercel y Supabase:** no se pudieron probar desde donde se desarrolló; las probarás tú al publicar, con `docs/DESPLIEGUE.md`.

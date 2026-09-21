@@ -1,0 +1,47 @@
+# Backend + PostgreSQL en tu máquina, para probar lo mismo que se publica:
+#
+#   1. Define el secreto de las sesiones (mínimo 32 caracteres) en tu terminal o en un archivo .env
+#      junto a este archivo:   JWT_SECRET=una-frase-larga-y-aleatoria-de-32-caracteres-o-mas
+#   2. docker compose up --build
+#   3. Crea el primer administrador (en otra terminal):
+#        docker compose exec api python -m app.scripts.create_admin
+#   4. El frontend se ejecuta aparte (npm run dev:api dentro de frontend/) y habla con http://localhost:8000
+#
+# En la demo publicada la base de datos es Supabase y el frontend va en Vercel: ver docs/DESPLIEGUE.md.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aurora
+      POSTGRES_PASSWORD: aurora
+      POSTGRES_DB: aurora
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aurora -d aurora"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://aurora:aurora@db:5432/aurora
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET con al menos 32 caracteres}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      FACE_ENGINE: sface
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      ML_TRAINING_ENABLED: ${ML_TRAINING_ENABLED:-false}
+    ports:
+      - "8000:8000"
+    volumes:
+      # El modelo de probabilidad entrenado vive en el disco, no en la base de datos
+      - ml_models:/app/models/ml
+
+volumes:
+  db_data:
+  ml_models:

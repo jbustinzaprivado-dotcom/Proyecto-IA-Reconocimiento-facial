@@ -253,7 +253,7 @@ describe('App: the account box', () => {
 describe('App: without a session', () => {
   const signedOut = { status: 'anonymous', user: null } as const
 
-  it.each(['/', '/usuarios', '/historial', '/cuenta', '/no-existe'])(
+  it.each(['/ingresar', '/usuarios', '/historial', '/cuenta', '/no-existe'])(
     'shows the sign-in on %s, with none of the app around it',
     async (path) => {
       renderAt(path, 'administrador', signedOut)
@@ -264,6 +264,13 @@ describe('App: without a session', () => {
       expect(screen.queryByRole('heading', { name: 'Dashboard' })).toBeNull()
     },
   )
+
+  it('never shows the app to an anonymous status, even if a user was left in the state', async () => {
+    renderAt('/usuarios', 'administrador', { status: 'anonymous' })
+    expect(await heading('Iniciar sesión')).toBeTruthy()
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Usuarios' })).toBeNull()
+  })
 
   it('says why the person is here when the session ended', async () => {
     renderAt('/', 'administrador', {
@@ -332,6 +339,60 @@ describe('App: mobile menu', () => {
   })
 })
 
+describe('App: the landing page', () => {
+  const signedOut = { status: 'anonymous', user: null } as const
+
+  it('is what someone without a session finds at the home address', async () => {
+    renderAt('/', 'administrador', signedOut)
+    expect(await heading('Aurora Biometrics')).toBeTruthy()
+    expect(document.title).toBe('Aurora Biometrics · Reconocimiento facial')
+    expect(screen.queryByRole('heading', { name: 'Iniciar sesión' })).toBeNull()
+    // None of the app is around it
+    expect(screen.queryByRole('navigation', { name: 'Principal' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).toBeNull()
+  })
+
+  it('leads to the sign-in with the button, and the sign-in leads back', async () => {
+    renderAt('/', 'administrador', signedOut)
+    await heading('Aurora Biometrics')
+    fireEvent.click(screen.getAllByRole('link', { name: 'Ingresar' })[0])
+    expect(await heading('Iniciar sesión')).toBeTruthy()
+    expect(document.title).toBe('Iniciar sesión · Reconocimiento facial')
+    fireEvent.click(screen.getByRole('link', { name: 'Volver al inicio' }))
+    expect(await heading('Aurora Biometrics')).toBeTruthy()
+  })
+
+  it('shows the sign-in, and not the landing, at the home address when the session ended', async () => {
+    renderAt('/', 'administrador', {
+      ...signedOut,
+      notice: 'Tu sesión venció. Inicia sesión otra vez.',
+    })
+    expect(await heading('Iniciar sesión')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Tu sesión venció. Inicia sesión otra vez.')
+    expect(screen.queryByRole('heading', { name: 'Aurora Biometrics' })).toBeNull()
+    expect(document.title).toBe('Iniciar sesión · Reconocimiento facial')
+  })
+
+  it('is not there at any other address: those ask for the sign-in', async () => {
+    renderAt('/historial', 'administrador', signedOut)
+    expect(await heading('Iniciar sesión')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Aurora Biometrics' })).toBeNull()
+  })
+
+  it('is not shown to someone who is signed in: the sign-in address goes to the Dashboard', async () => {
+    renderAt('/ingresar', 'operador')
+    expect(await heading('Dashboard')).toBeTruthy()
+    expect(document.title).toBe('Dashboard · Reconocimiento facial')
+    expect(screen.queryByRole('heading', { name: 'Aurora Biometrics' })).toBeNull()
+  })
+
+  it('is not shown to someone who is signed in at the home address either', async () => {
+    renderAt('/', 'consulta')
+    expect(await heading('Dashboard')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Aurora Biometrics' })).toBeNull()
+  })
+})
+
 // The real provider, with the API replaced: the whole way from the sign-in to the page
 describe('App: from the sign-in to the page', () => {
   const session = (role: Role): SessionData => ({
@@ -387,7 +448,7 @@ describe('App: from the sign-in to the page', () => {
       success: false,
       error: 'Correo o contraseña incorrectos.',
     })
-    renderWithProvider('/')
+    renderWithProvider('/ingresar')
     await signIn()
     expect((await screen.findByRole('alert')).textContent).toBe('Correo o contraseña incorrectos.')
     expect(loadSession()).toBeNull()
@@ -401,6 +462,7 @@ describe('App: from the sign-in to the page', () => {
     await heading('Usuarios')
     fireEvent.click(screen.getAllByRole('button', { name: 'Cerrar sesión' })[0])
 
+    // No session and nothing to explain, on an address that is not the home one: the sign-in
     expect(await heading('Iniciar sesión')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Usuarios' })).toBeNull()
     expect(screen.queryByRole('status')).toBeNull()
@@ -409,7 +471,7 @@ describe('App: from the sign-in to the page', () => {
 
   it('goes back to the sign-in, saying so, when the server stops accepting the session', async () => {
     vi.mocked(api.login).mockResolvedValue({ success: true, resultado: session('operador') })
-    renderWithProvider('/')
+    renderWithProvider('/ingresar')
     await signIn()
     await heading('Dashboard')
 
@@ -450,5 +512,15 @@ describe('App: from the sign-in to the page', () => {
     expect(await heading('Iniciar sesión')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toContain('Tu sesión no es válida')
     expect(screen.queryByRole('heading', { name: 'Usuarios' })).toBeNull()
+  })
+
+  it('shows the landing after signing out from the home address, with nothing to explain', async () => {
+    vi.mocked(api.login).mockResolvedValue({ success: true, resultado: session('operador') })
+    renderWithProvider('/ingresar')
+    await signIn()
+    await heading('Dashboard')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cerrar sesión' })[0])
+    expect(await heading('Aurora Biometrics')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

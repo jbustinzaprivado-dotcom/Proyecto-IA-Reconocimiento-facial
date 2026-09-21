@@ -81,6 +81,16 @@ describe('Personas: the list', () => {
   })
 })
 
+describe('Personas: keyboard', () => {
+  it('lets the keyboard reach a table that scrolls sideways, as a named region', async () => {
+    renderPage()
+    await screen.findByText('Ana Torres')
+    const region = screen.getByRole('region', { name: 'Tabla de personas' })
+    expect(region.getAttribute('tabindex')).toBe('0')
+    expect(region.querySelector('table')).toBeTruthy()
+  })
+})
+
 describe('Personas: what each role sees', () => {
   it('gives the administrator the actions, the cleanup and its explanation', async () => {
     renderPage('administrador')

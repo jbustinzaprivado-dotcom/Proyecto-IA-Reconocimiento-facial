@@ -107,7 +107,12 @@ export default function Usuarios() {
           )}
         </div>
         <QueryState loading={loaded.loading} error={loaded.error} onRetry={loaded.reload}>
-          <div className="overflow-x-auto rounded-xl border border-line bg-white">
+          <div
+            role="region"
+            tabIndex={0}
+            aria-label="Tabla de usuarios"
+            className="overflow-x-auto rounded-xl border border-line bg-white"
+          >
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Cuentas de usuario</caption>
               <thead className="border-b border-line bg-tint text-muted">

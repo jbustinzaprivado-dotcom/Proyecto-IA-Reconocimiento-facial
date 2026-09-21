@@ -1,10 +1,15 @@
+import os
 from collections.abc import Callable, Iterator
 
 import cv2
 import numpy as np
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (registers the tables in Base.metadata)
 from app.api.deps import ENGINE_NOT_LOADED
@@ -39,8 +44,40 @@ def the_real_folder_of_the_models_stays_untouched() -> Iterator[None]:
     )
 
 
+# With TEST_DATABASE_URL set to a PostgreSQL address, every test runs against that server instead of
+# SQLite (see docs/PROCESO.md). The schema is made by the migrations, not by the models
+POSTGRES_URL = os.environ.get("TEST_DATABASE_URL", "")
+APP_TABLES = "personas, face_embeddings, recognition_logs, ml_training_records, usuarios, auditoria"
+
+
+@pytest.fixture(scope="session")
+def postgres_engine() -> Iterator[Engine | None]:
+    if not POSTGRES_URL:
+        yield None
+        return
+    # One connection for the whole run, the migrations included: a test server like PGlite takes one
+    # and it dies on a statement of thousands of parameters, so the inserts go in small batches
+    engine = create_engine(POSTGRES_URL, poolclass=StaticPool, insertmanyvalues_page_size=50)
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    with engine.connect() as connection:
+        config.attributes["connection"] = connection
+        command.downgrade(config, "base")
+        command.upgrade(config, "head")
+        connection.commit()
+    yield engine
+    engine.dispose()
+
+
 @pytest.fixture
-def db() -> Iterator[Session]:
+def db(postgres_engine: Engine | None) -> Iterator[Session]:
+    if postgres_engine is not None:
+        with postgres_engine.begin() as connection:
+            connection.execute(text(f"TRUNCATE {APP_TABLES} RESTART IDENTITY CASCADE"))
+        factory = sessionmaker(bind=postgres_engine, autoflush=False, expire_on_commit=False)
+        with factory() as session:
+            yield session
+        return
     engine = make_engine("sqlite://")
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
