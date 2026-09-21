@@ -1,0 +1,20 @@
+# Otro proyecto que vive en esta carpeta y no forma parte de este sistema
+/Proyecto_machinelearning-main/
+
+# package-lock.json vacío de la raíz. Los de frontend/ y backend/ sí se versionan
+/package-lock.json
+
+# Dependencias y compilaciones
+node_modules/
+dist/
+dist-ssr/
+
+# Archivos locales y secretos (el .env del backend guardará credenciales)
+*.local
+.env
+
+# Python (backend futuro)
+venv/
+.venv/
+__pycache__/
+*.pyc
